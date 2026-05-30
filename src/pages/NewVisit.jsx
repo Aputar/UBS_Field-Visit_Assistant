@@ -107,49 +107,26 @@ export default function NewVisit({ onDone }) {
     if (!text.trim()) { showToast("No speech detected. Please try again."); setVoicePhase("idle"); return; }
     setAiLoading(true);
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      // Call our secure Vercel serverless function — API key stays on server
+      const response = await fetch("/api/parse-visit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: `You are a field visit assistant for UltraTech Building Solutions (UBS). Extract structured data from this spoken field visit note. Return ONLY valid JSON, nothing else.
-
-Spoken note: "${text}"
-
-Available depots: ${DEPOTS.join(", ")}
-Available categories: ${CATS.join(", ")}
-
-Return this exact JSON structure:
-{
-  "dealerName": "extracted dealer/store name or empty string",
-  "depot": "closest matching depot from list or empty",
-  "notes": "summary of discussion points",
-  "categories": ["array of matching categories from list"],
-  "actions": [
-    {
-      "title": "action title",
-      "detail": "action details",
-      "assignedToName": "person name mentioned",
-      "priority": "High or Medium or Low",
-      "deadline": "YYYY-MM-DD format or empty",
-      "category": "matching category"
-    }
-  ]
-}`
-          }]
-        })
+        body: JSON.stringify({ transcript: text })
       });
-      const data = await response.json();
-      const raw = data.content?.[0]?.text || "{}";
-      const clean = raw.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Server error");
+      }
+
+      const parsed = await response.json();
+      if (!parsed || typeof parsed !== "object") throw new Error("Invalid response");
+
       setAiParsed(parsed);
       setVoicePhase("review");
     } catch (e) {
-      showToast("AI parsing failed. Please fill manually.");
+      console.error("AI error:", e);
+      showToast("AI parsing failed: " + e.message);
       setMode("manual");
       setVoicePhase("idle");
     }
