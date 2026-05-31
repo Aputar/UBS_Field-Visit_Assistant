@@ -1,124 +1,148 @@
--- UBS FieldOS — Supabase Database Schema
--- Run this entire file in Supabase > SQL Editor > New Query
+import { useState } from "react";
+import { useApp } from "../context/AppContext";
+import * as db from "../lib/db";
+import { useToast, Toast } from "../components/Toast";
 
--- USERS
-create table if not exists users (
-  id text primary key,
-  name text not null,
-  role text not null default 'TRH',
-  region text,
-  password text not null,
-  created_at timestamptz default now()
-);
+function isOverdue(d) { return new Date(d) < new Date() && d; }
 
--- DEALERS
-create table if not exists dealers (
-  id text primary key,
-  name text not null,
-  code text,
-  depot text,
-  city text,
-  contact text,
-  trh_name text,
-  re_name text,
-  created_at timestamptz default now()
-);
+const CATS = ["All","Cement","Paints","PVC","Sanitary","Tiles","Waterproofing","Displays & Branding","Credit/Outstanding","New Product","Competition","Team Issue","Store Experience","Inventory","Influencer","Others"];
 
--- TRHs
-create table if not exists trhs (
-  id text primary key,
-  name text not null,
-  phone text,
-  region text,
-  created_at timestamptz default now()
-);
+export default function Actions() {
+  const { data, updateData, currentUser, reload, offline } = useApp();
+  const { actions, dealers, users, trhs, res } = data;
+  const { toast, showToast } = useToast();
+  const [filter, setFilter] = useState("All");
+  const [catFilter, setCatFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [remarks, setRemarks] = useState({});
 
--- REs
-create table if not exists res (
-  id text primary key,
-  name text not null,
-  phone text,
-  depot text,
-  created_at timestamptz default now()
-);
+  const getName = (id) => {
+    const u = users?.find(u => u.id === id);
+    if (u) return u.name;
+    const t = trhs?.find(t => t.id === id);
+    if (t) return t.name;
+    const r = res?.find(r => r.id === id);
+    if (r) return r.name;
+    return id || "—";
+  };
 
--- VISITS
-create table if not exists visits (
-  id text primary key,
-  dealer_id text,
-  date date,
-  depot text,
-  categories text[],
-  notes text,
-  photos text[],
-  created_by text,
-  created_at timestamptz default now()
-);
+  const getDealerName = (id) => dealers.find(d => d.id === id)?.name || "—";
 
--- ACTIONS
-create table if not exists actions (
-  id text primary key,
-  visit_id text,
-  dealer_id text,
-  depot text,
-  title text,
-  detail text,
-  assigned_to text,
-  priority text default 'Medium',
-  deadline date,
-  category text,
-  status text default 'Open',
-  remarks text,
-  created_by text,
-  created_at timestamptz default now()
-);
+  const myActions = currentUser.role === "ZRH"
+    ? actions
+    : actions.filter(a => a.assignedTo === currentUser.id || a.createdBy === currentUser.id);
 
--- CATEGORIES
-create table if not exists categories (
-  id serial primary key,
-  name text unique not null,
-  created_at timestamptz default now()
-);
+  const filtered = myActions.filter(a => {
+    const statusMatch = filter === "All" || (filter === "Open" && a.status === "Open") || (filter === "In Progress" && a.status === "In Progress") || (filter === "Closed" && a.status === "Closed") || (filter === "Overdue" && isOverdue(a.deadline) && a.status !== "Closed");
+    const catMatch = catFilter === "All" || a.category === catFilter;
+    const searchMatch = !search || a.title.toLowerCase().includes(search.toLowerCase()) || getDealerName(a.dealerId).toLowerCase().includes(search.toLowerCase()) || (a.depot || "").toLowerCase().includes(search.toLowerCase());
+    return statusMatch && catMatch && searchMatch;
+  });
 
--- Enable Row Level Security but allow all for now (no auth yet)
-alter table users enable row level security;
-alter table dealers enable row level security;
-alter table trhs enable row level security;
-alter table res enable row level security;
-alter table visits enable row level security;
-alter table actions enable row level security;
-alter table categories enable row level security;
+  const updateStatus = async (id, status) => {
+    try {
+      if (!offline) {
+        await db.updateAction(id, { status, remarks: remarks[id] || "" });
+        await reload();
+      } else {
+        const updated = actions.map(a => a.id === id ? { ...a, status, remarks: remarks[id] || a.remarks } : a);
+        updateData("actions", updated);
+      }
+      showToast(`Status updated to ${status}`);
+    } catch(e) { showToast("Error: " + e.message); }
+  };
 
--- Allow all operations (open policy — app uses its own login)
-create policy "allow all" on users for all using (true) with check (true);
-create policy "allow all" on dealers for all using (true) with check (true);
-create policy "allow all" on trhs for all using (true) with check (true);
-create policy "allow all" on res for all using (true) with check (true);
-create policy "allow all" on visits for all using (true) with check (true);
-create policy "allow all" on actions for all using (true) with check (true);
-create policy "allow all" on categories for all using (true) with check (true);
+  const deleteAction = async (id) => {
+    try {
+      if (!offline) { await db.deleteAction(id); await reload(); }
+      else { updateData("actions", actions.filter(a => a.id !== id)); }
+      showToast("Action deleted");
+    } catch(e) { showToast("Error: " + e.message); }
+  };
 
--- Enable real-time for all tables
-alter publication supabase_realtime add table users;
-alter publication supabase_realtime add table dealers;
-alter publication supabase_realtime add table trhs;
-alter publication supabase_realtime add table res;
-alter publication supabase_realtime add table visits;
-alter publication supabase_realtime add table actions;
-alter publication supabase_realtime add table categories;
+  const priorityColor = p => p === "High" ? "badge-red" : p === "Medium" ? "badge-amber" : "badge-blue";
 
--- Seed default users
-insert into users (id, name, role, region, password) values
-  ('u1', 'Rajesh Mehta', 'ZRH', 'West (Guj + Mumbai)', 'admin123'),
-  ('u2', 'Naveen Ahuja', 'ZRH', 'Gujarat', 'admin123'),
-  ('u3', 'Vikram Shah', 'TRH', 'Gujarat North', 'trh123'),
-  ('u4', 'Priya Desai', 'RE', 'Ahmedabad', 're123')
-on conflict (id) do nothing;
+  return (
+    <div className="page">
+      <div className="page-title">Action Board</div>
+      <div className="page-sub">{filtered.length} of {myActions.length} actions shown</div>
 
--- Seed default categories
-insert into categories (name) values
-  ('Cement'),('Paints'),('PVC'),('Sanitary'),('Tiles'),
-  ('Waterproofing'),('Displays & Branding'),('Credit/Outstanding'),
-  ('New Product'),('Competition'),('Team Issue'),('Store Experience'),
-  ('Inventory'),('Influencer/Contractor'),('Payment Issue'),('Others')
-on conflict (name) do nothing;
+      <div className="search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input className="search-input" placeholder="Search actions, dealer, depot…" value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+
+      <div className="filter-row">
+        {["All","Open","In Progress","Overdue","Closed"].map(f => (
+          <button key={f} className={`filter-pill${filter === f ? " active" : ""}`} onClick={() => setFilter(f)}>{f}</button>
+        ))}
+      </div>
+
+      <div className="filter-row" style={{ marginBottom: 16 }}>
+        {["All","Paints","PVC","Sanitary","Waterproofing","Displays & Branding","Credit/Outstanding"].map(c => (
+          <button key={c} className={`filter-pill${catFilter === c ? " active" : ""}`} onClick={() => setCatFilter(c)}>{c}</button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          <p>No actions matching your filters</p>
+        </div>
+      )}
+
+      {filtered.map(a => (
+        <div key={a.id} className="action-card" style={{ borderLeft: isOverdue(a.deadline) && a.status !== "Closed" ? "3px solid var(--red)" : "3px solid transparent" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div className="action-title">{a.title}</div>
+            <span className={`badge ${priorityColor(a.priority)}`}>{a.priority}</span>
+          </div>
+          <div className="action-meta">
+            <span>📍 {a.depot || "—"}</span>
+            <span>👤 {getName(a.assignedTo)}</span>
+            <span>🏷 {a.category}</span>
+          </div>
+          {a.detail && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 6, lineHeight: 1.5 }}>{a.detail}</div>}
+
+          {editId === a.id && (
+            <div style={{ marginTop: 8 }}>
+              <input
+                className="form-input"
+                placeholder="Update remarks…"
+                value={remarks[a.id] || a.remarks || ""}
+                onChange={e => setRemarks(r => ({ ...r, [a.id]: e.target.value }))}
+                style={{ fontSize: 12, padding: "6px 10px", marginBottom: 6 }}
+              />
+            </div>
+          )}
+
+          <div className="action-footer">
+            <div>
+              <div className={`action-due${isOverdue(a.deadline) && a.status !== "Closed" ? " overdue" : ""}`}>
+                {isOverdue(a.deadline) && a.status !== "Closed" ? "⚠ Overdue · " : "Due "}
+                {a.deadline ? new Date(a.deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
+              </div>
+              {a.remarks && <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>💬 {a.remarks}</div>}
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <button className="btn-icon" title="Edit remarks" onClick={() => setEditId(editId === a.id ? null : a.id)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <select
+                className="status-select"
+                value={a.status}
+                onChange={e => updateStatus(a.id, e.target.value)}
+              >
+                <option>Open</option>
+                <option>In Progress</option>
+                <option>Closed</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      ))}
+      <Toast message={toast} />
+    </div>
+  );
+}
