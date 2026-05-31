@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import * as db from "../lib/db";
 import { useApp } from "../context/AppContext";
 import { useToast, Toast } from "../components/Toast";
 
@@ -48,7 +49,7 @@ function buildWhatsAppMessage(dealerName, depot, notes, actions, visitorName, ca
 }
 
 export default function NewVisit({ onDone }) {
-  const { data, updateData, currentUser } = useApp();
+  const { data, updateData, currentUser, reload, offline } = useApp();
   const { toast, showToast } = useToast();
   const categories = data.categories || ["Cement","Paints","PVC","Sanitary","Tiles","Waterproofing","Displays & Branding","Credit/Outstanding","New Product","Competition","Team Issue","Store Experience","Inventory","Influencer/Contractor","Payment Issue","Others"];
 
@@ -80,63 +81,148 @@ export default function NewVisit({ onDone }) {
     ...( data.users || []).filter(u => u.role === "TRH" || u.role === "RE").map(u => u.name),
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 
-  // Voice recording
+  // Voice recording — supports English + Hindi, works on Chrome/Safari
   const startRecording = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { showToast("Voice not supported. Use Chrome browser."); return; }
-    const r = new SR();
-    r.continuous = true;
-    r.interimResults = true;
-    r.lang = "en-IN";
-    let final = "";
-    r.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript + " ";
-        else interim += e.results[i][0].transcript;
-      }
-      setTranscript(final + interim);
-    };
-    r.onerror = (e) => { showToast("Mic error: " + e.error + ". Allow microphone access."); setIsRecording(false); setVoicePhase("idle"); };
-    r.onend = () => { if (isRecording) setIsRecording(false); };
-    r.start();
-    recognitionRef.current = r;
-    setIsRecording(true);
-    setVoicePhase("recording");
+    if (!SR) {
+      showToast("Voice not supported. Please use Chrome on Android or Safari on iPhone.");
+      return;
+    }
+    try {
+      const r = new SR();
+      r.continuous = true;
+      r.interimResults = true;
+      r.lang = "en-IN"; // Indian English — also picks up Hindi words
+      r.maxAlternatives = 1;
+
+      let finalText = "";
+
+      r.onstart = () => {
+        setIsRecording(true);
+        setVoicePhase("recording");
+        setTranscript("");
+        finalText = "";
+      };
+
+      r.onresult = (e) => {
+        let interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            finalText += e.results[i][0].transcript + " ";
+          } else {
+            interim += e.results[i][0].transcript;
+          }
+        }
+        setTranscript(finalText + interim);
+      };
+
+      r.onerror = (e) => {
+        console.error("Speech recognition error:", e.error);
+        if (e.error === "not-allowed") {
+          showToast("Microphone access denied. Please allow mic in browser settings.");
+        } else if (e.error === "no-speech") {
+          showToast("No speech detected. Please speak louder and try again.");
+        } else if (e.error === "network") {
+          showToast("Network error. Check your internet connection.");
+        } else {
+          showToast("Mic error: " + e.error + ". Try again.");
+        }
+        setIsRecording(false);
+        setVoicePhase("idle");
+      };
+
+      r.onend = () => {
+        // Only process if we have text and we stopped intentionally
+        if (finalText.trim()) {
+          setTranscript(finalText.trim());
+        }
+      };
+
+      recognitionRef.current = r;
+      r.start();
+    } catch (err) {
+      showToast("Could not start recording: " + err.message);
+      setIsRecording(false);
+      setVoicePhase("idle");
+    }
   };
 
   const stopRecording = () => {
-    recognitionRef.current?.stop();
+    try { recognitionRef.current?.stop(); } catch(e) {}
     setIsRecording(false);
     setVoicePhase("processing");
-    const captured = transcript;
-    setTimeout(() => parseWithAI(captured), 400);
+    // Small delay to let final results come through
+    setTimeout(() => {
+      const captured = transcript;
+      if (!captured?.trim()) {
+        showToast("No speech captured. Please try again.");
+        setVoicePhase("idle");
+        return;
+      }
+      parseWithAI(captured);
+    }, 600);
   };
 
   const parseWithAI = async (text) => {
-    if (!text?.trim()) { showToast("No speech captured. Try again."); setVoicePhase("idle"); return; }
+    if (!text?.trim()) { showToast("No speech captured. Please try again."); setVoicePhase("idle"); return; }
+
+    // Always save transcript to notes immediately — works with or without AI
+    setNotes(text);
+
     try {
       const response = await fetch("/api/parse-visit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript: text })
       });
-      if (!response.ok) throw new Error("Server error");
-      const parsed = await response.json();
-      // Auto-fill form fields from AI
-      if (parsed.dealerName) setNewDealerName(parsed.dealerName);
-      if (parsed.depot) setDepot(parsed.depot);
-      if (parsed.notes) setNotes(parsed.notes);
-      if (parsed.categories?.length) setSelectedCats(parsed.categories);
-      if (parsed.actions?.[0]) {
-        if (parsed.actions[0].assignedToName) setAssignTo(parsed.actions[0].assignedToName);
-        if (parsed.actions[0].priority) setPriority(parsed.actions[0].priority);
-        if (parsed.actions[0].deadline) setDeadline(parsed.actions[0].deadline);
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        // If API key not configured — silent fallback, no scary error
+        if (response.status === 500 && errData.error?.includes("ANTHROPIC_API_KEY")) {
+          showToast("🎙 Voice saved in notes! Fill remaining fields manually.");
+        } else {
+          showToast("🎙 Voice saved in notes! AI unavailable — fill fields manually.");
+        }
+        setVoicePhase("idle");
+        setMode("manual");
+        return;
       }
-      setIsNewDealer(true);
-      showToast("✨ AI filled the form — review and submit!");
+
+      const parsed = await response.json();
+
+      // Auto-fill all extracted fields
+      if (parsed.dealerName?.trim()) {
+        setNewDealerName(parsed.dealerName.trim());
+        setIsNewDealer(true);
+      }
+      if (parsed.depot?.trim()) setDepot(parsed.depot.trim());
+      if (parsed.notes?.trim()) setNotes(parsed.notes.trim());
+      if (parsed.categories?.length) setSelectedCats(parsed.categories);
+      if (parsed.actions?.length > 0) {
+        const a = parsed.actions[0];
+        if (a.assignedToName?.trim()) setAssignTo(a.assignedToName.trim());
+        if (a.priority) setPriority(a.priority);
+        if (a.deadline) setDeadline(a.deadline);
+      }
+
+      const filled = [
+        parsed.dealerName && "Dealer",
+        parsed.depot && "Depot",
+        parsed.categories?.length && "Categories",
+        parsed.actions?.length && "Action"
+      ].filter(Boolean);
+
+      if (filled.length > 0) {
+        showToast(`✨ AI filled: ${filled.join(", ")} — review and submit!`);
+      } else {
+        showToast("🎙 Voice saved! Review and fill remaining fields.");
+      }
+
     } catch (e) {
-      showToast("AI failed. Form is ready — fill manually.");
+      // Network error or no API — just use the transcript silently
+      console.log("AI not available, using transcript only:", e.message);
+      showToast("🎙 Voice saved in notes! Fill remaining fields manually.");
     }
     setVoicePhase("idle");
     setMode("manual");
@@ -150,7 +236,7 @@ export default function NewVisit({ onDone }) {
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const finalDepot = depot;
     const finalDealerName = isNewDealer
       ? newDealerName
@@ -159,49 +245,53 @@ export default function NewVisit({ onDone }) {
     if (!finalDepot) return showToast("Please select a depot");
     if (!finalDealerName) return showToast("Please enter dealer name");
 
-    let finalDealerId = dealerId;
-    if (isNewDealer && newDealerName) {
-      const existing = data.dealers.find(d => d.name.toLowerCase() === newDealerName.toLowerCase() && d.depot === finalDepot);
-      if (existing) {
-        finalDealerId = existing.id;
-      } else {
-        const nd = { id: uid(), name: newDealerName, code: "", depot: finalDepot, city: finalDepot, contact: "" };
-        updateData("dealers", [...data.dealers, nd]);
-        finalDealerId = nd.id;
+    try {
+      let finalDealerId = dealerId;
+      if (isNewDealer && newDealerName) {
+        const existing = data.dealers.find(d => d.name.toLowerCase() === newDealerName.toLowerCase() && d.depot === finalDepot);
+        if (existing) {
+          finalDealerId = existing.id;
+        } else {
+          const nd = { id: uid(), name: newDealerName, code: "", depot: finalDepot, city: finalDepot, contact: "" };
+          if (!offline) { const saved = await db.createDealer(nd); finalDealerId = saved.id; }
+          else { updateData("dealers", [...data.dealers, nd]); finalDealerId = nd.id; }
+        }
       }
+
+      const visitData = {
+        id: uid(), dealer_id: finalDealerId, date: new Date().toISOString().slice(0, 10),
+        categories: selectedCats, notes, photos: photos.map(p => p.url),
+        created_by: currentUser.id, depot: finalDepot
+      };
+      let savedVisit = visitData;
+      if (!offline) { savedVisit = await db.createVisit(visitData); }
+      else { updateData("visits", [...data.visits, visitData]); }
+
+      if (assignTo || deadline) {
+        const actionData = {
+          id: uid(), visit_id: savedVisit.id, dealer_id: finalDealerId,
+          title: notes?.slice(0, 60) || "Visit action",
+          detail: notes, assigned_to: assignTo,
+          priority, deadline: deadline || null,
+          category: selectedCats[0] || "Others",
+          status: "Open", remarks: "", created_by: currentUser.id, depot: finalDepot
+        };
+        if (!offline) { await db.createAction(actionData); }
+        else { updateData("actions", [...data.actions, actionData]); }
+      }
+
+      showToast("✓ Visit saved! Sending WhatsApp…");
+
+      // Find TRH/RE phone
+      const trh = (data.trhs || []).find(t => t.name === assignTo) || (data.res || []).find(r => r.name === assignTo);
+      const phone = trh?.phone || "";
+      const msg = buildWhatsAppMessage(finalDealerName, finalDepot, notes, assignTo ? [{ assignedToName: assignTo, priority, deadline }] : [], currentUser.name, selectedCats);
+
+      setTimeout(() => openWhatsApp(phone, msg), 700);
+      setTimeout(() => onDone(), 1600);
+    } catch(e) {
+      showToast("Error saving visit: " + e.message);
     }
-
-    const visit = {
-      id: uid(), dealerId: finalDealerId, date: new Date().toISOString().slice(0, 10),
-      categories: selectedCats, notes, photos: photos.map(p => p.url),
-      createdBy: currentUser.id, depot: finalDepot
-    };
-    updateData("visits", [...data.visits, visit]);
-
-    const action = {
-      id: uid(), visitId: visit.id, dealerId: finalDealerId,
-      title: notes?.slice(0, 60) || "Visit action",
-      detail: notes, assignedTo: assignTo, assignedToName: assignTo,
-      priority, deadline, category: selectedCats[0] || "Others",
-      status: "Open", remarks: "", createdBy: currentUser.id, depot: finalDepot
-    };
-    if (assignTo || deadline) {
-      updateData("actions", [...data.actions, action]);
-    }
-
-    showToast("✓ Visit saved! Sending WhatsApp…");
-
-    // Find TRH phone number
-    const trh = (data.trhs || []).find(t => t.name === assignTo) || (data.res || []).find(r => r.name === assignTo);
-    const phone = trh?.phone || "";
-
-    const msg = buildWhatsAppMessage(finalDealerName, finalDepot, notes, assignTo ? [{ assignedToName: assignTo, priority, deadline }] : [], currentUser.name, selectedCats);
-
-    setTimeout(() => {
-      openWhatsApp(phone, msg);
-    }, 700);
-
-    setTimeout(() => onDone(), 1600);
   };
 
   // ── VOICE RECORDING OVERLAY ──────────────────────────────
@@ -231,9 +321,11 @@ export default function NewVisit({ onDone }) {
       )}
       {voicePhase === "processing" && (
         <>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✨</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 8 }}>AI is filling the form…</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Extracting dealer, depot, actions & deadlines</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🎙</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 8 }}>Processing your voice…</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", textAlign: "center", lineHeight: 1.7 }}>
+            Saving to notes.<br/>If AI is enabled, fields will be auto-filled.
+          </div>
           <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
             {[0,1,2].map(i => (
               <div key={i} style={{ width: 10, height: 10, borderRadius: "50%", background: "#e8a020", animation: `bounce 0.8s ${i*0.25}s infinite ease-in-out` }} />
@@ -273,7 +365,7 @@ export default function NewVisit({ onDone }) {
       {!isRecording && voicePhase === "idle" && (
         <div className="alert alert-info" style={{ marginBottom: 14 }}>
           <span>🎙</span>
-          <span>Tap <b>Speak</b> and say everything — dealer, depot, discussion, who to assign, priority & deadline. AI will fill the form for you.</span>
+          <span>Tap <b>Speak</b> → say the discussion notes out loud → your words appear in the Notes field automatically. Then select depot, dealer, assign to and deadline.</span>
         </div>
       )}
 

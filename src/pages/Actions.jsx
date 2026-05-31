@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
+import * as db from "../lib/db";
 import { useToast, Toast } from "../components/Toast";
 
 function isOverdue(d) { return new Date(d) < new Date() && d; }
@@ -7,7 +8,7 @@ function isOverdue(d) { return new Date(d) < new Date() && d; }
 const CATS = ["All","Cement","Paints","PVC","Sanitary","Tiles","Waterproofing","Displays & Branding","Credit/Outstanding","New Product","Competition","Team Issue","Store Experience","Inventory","Influencer","Others"];
 
 export default function Actions() {
-  const { data, updateData, currentUser } = useApp();
+  const { data, updateData, currentUser, reload, offline } = useApp();
   const { actions, dealers, users, trhs, res } = data;
   const { toast, showToast } = useToast();
   const [filter, setFilter] = useState("All");
@@ -39,15 +40,25 @@ export default function Actions() {
     return statusMatch && catMatch && searchMatch;
   });
 
-  const updateStatus = (id, status) => {
-    const updated = actions.map(a => a.id === id ? { ...a, status, remarks: remarks[id] || a.remarks } : a);
-    updateData("actions", updated);
-    showToast(`Status updated to ${status}`);
+  const updateStatus = async (id, status) => {
+    try {
+      if (!offline) {
+        await db.updateAction(id, { status, remarks: remarks[id] || "" });
+        await reload();
+      } else {
+        const updated = actions.map(a => a.id === id ? { ...a, status, remarks: remarks[id] || a.remarks } : a);
+        updateData("actions", updated);
+      }
+      showToast(`Status updated to ${status}`);
+    } catch(e) { showToast("Error: " + e.message); }
   };
 
-  const deleteAction = (id) => {
-    updateData("actions", actions.filter(a => a.id !== id));
-    showToast("Action deleted");
+  const deleteAction = async (id) => {
+    try {
+      if (!offline) { await db.deleteAction(id); await reload(); }
+      else { updateData("actions", actions.filter(a => a.id !== id)); }
+      showToast("Action deleted");
+    } catch(e) { showToast("Error: " + e.message); }
   };
 
   const priorityColor = p => p === "High" ? "badge-red" : p === "Medium" ? "badge-amber" : "badge-blue";
