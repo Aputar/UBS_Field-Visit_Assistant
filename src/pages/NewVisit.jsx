@@ -413,11 +413,18 @@ export default function NewVisit({ onDone }) {
             setDealerId(e.target.value);
             const d = data.dealers.find(x => x.id === e.target.value);
             if (d?.depot) setDepot(d.depot);
+            if (d?.trh_name) setAssignTo(d.trh_name); // auto-fill TRH
           }}>
             <option value="">Select dealer…</option>
-            {data.dealers.filter(d => !depot || d.depot === depot).map(d => (
-              <option key={d.id} value={d.id}>{d.name} — {d.depot}</option>
-            ))}
+            {data.dealers
+              .filter(d => !depot || !d.depot || d.depot === "" || d.depot === depot)
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(d => (
+                <option key={d.id} value={d.id}>
+                  {d.name}{d.contact ? ` · ${d.contact}` : ""}
+                </option>
+              ))
+            }
           </select>
         </div>
       ) : (
