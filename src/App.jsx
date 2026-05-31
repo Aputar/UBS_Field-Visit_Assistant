@@ -11,59 +11,52 @@ import BottomNav from "./components/BottomNav";
 import TopBar from "./components/TopBar";
 import { supabase } from "./lib/supabase";
 import * as db from "./lib/db";
+import { OFFLINE_TRHS, OFFLINE_DEALERS } from "./data/masterData";
 import "./App.css";
 
 const DEFAULT_CATS = ["Cement","Paints","PVC","Sanitary","Tiles","Waterproofing","Displays & Branding","Credit/Outstanding","New Product","Competition","Team Issue","Store Experience","Inventory","Influencer/Contractor","Payment Issue","Others"];
 const DEPOTS = ["Ahmedabad","Mehsana","Palanpur","Kutchh","Junagadh","Surendranagar","Rajkot","Jamnagar","Bharuch","Valsad","Surat","Gandhinagar","Dahod","Anand","Vadodara","Bhavnagar","Greater Mumbai","Thane","Dahanu"];
 
-// These users ALWAYS work — even without Supabase
 const HARDCODED_USERS = [
-  { id: "u1", name: "Rajesh Mehta",  role: "ZRH", region: "West (Guj + Mumbai)", password: "admin123" },
-  { id: "u2", name: "Naveen Ahuja",  role: "ZRH", region: "Gujarat",              password: "admin123" },
-  { id: "u3", name: "Vikram Shah",   role: "TRH", region: "Gujarat North",        password: "trh123"   },
-  { id: "u4", name: "Priya Desai",   role: "RE",  region: "Ahmedabad",            password: "re123"    },
-  { id: "u5", name: "Swapnil Gajjar",     role: "TRH", region: "Gujarat", password: "swapnil123" },
-  { id: "u6", name: "Harkishan Prajapati",role: "TRH", region: "Gujarat", password: "harkishan123" },
-  { id: "u7", name: "Prashant Singh",     role: "TRH", region: "Gujarat", password: "prashant123" },
-  { id: "u8", name: "Mayur Sardhara",     role: "TRH", region: "Gujarat", password: "mayur123" },
-  { id: "u9", name: "Kamlesh Chavan",     role: "TRH", region: "Gujarat", password: "kamlesh123" },
-  { id: "u10", name: "Darshak Mehta",     role: "TRH", region: "Gujarat", password: "darshak123" },
-  { id: "u11", name: "Pankaj Singh",      role: "TRH", region: "Gujarat", password: "pankaj123" },
-  { id: "u12", name: "Ruturaj Taviyad",   role: "TRH", region: "Gujarat", password: "ruturaj123" },
-  { id: "u13", name: "Vishal Sengar",     role: "TRH", region: "Gujarat", password: "vishal123" },
-  { id: "u14", name: "Dhiraj Joshi",      role: "TRH", region: "Gujarat", password: "dhiraj123" },
-  { id: "u15", name: "Nikhil Verma",      role: "TRH", region: "Gujarat", password: "nikhil123" },
+  { id: "u1",  name: "Naveen Ahuja",          role: "ZRH", region: "Gujarat",              password: "admin123"     },
+  { id: "u2",  name: "Rajesh Mehta",          role: "ZRH", region: "West (Guj + Mumbai)",  password: "admin123"     },
+  { id: "u3",  name: "Vikram Shah",           role: "TRH", region: "Gujarat North",        password: "trh123"       },
+  { id: "u4",  name: "Priya Desai",           role: "RE",  region: "Ahmedabad",            password: "re123"        },
+  { id: "u5",  name: "Swapnil Gajjar",        role: "TRH", region: "Gujarat",              password: "swapnil123"   },
+  { id: "u6",  name: "Harkishan Prajapati",   role: "TRH", region: "Gujarat",              password: "harkishan123" },
+  { id: "u7",  name: "Prashant Singh",        role: "TRH", region: "Gujarat",              password: "prashant123"  },
+  { id: "u8",  name: "Mayur Sardhara",        role: "TRH", region: "Gujarat",              password: "mayur123"     },
+  { id: "u9",  name: "Kamlesh Chavan",        role: "TRH", region: "Gujarat",              password: "kamlesh123"   },
+  { id: "u10", name: "Darshak Mehta",         role: "TRH", region: "Gujarat",              password: "darshak123"   },
+  { id: "u11", name: "Pankaj Singh",          role: "TRH", region: "Gujarat",              password: "pankaj123"    },
+  { id: "u12", name: "Ruturaj Taviyad",       role: "TRH", region: "Gujarat",              password: "ruturaj123"   },
+  { id: "u13", name: "Vishal Sengar",         role: "TRH", region: "Gujarat",              password: "vishal123"    },
+  { id: "u14", name: "Dhiraj Joshi",          role: "TRH", region: "Gujarat",              password: "dhiraj123"    },
+  { id: "u15", name: "Nikhil Verma",          role: "TRH", region: "Gujarat",              password: "nikhil123"    },
 ];
 
-const emptyData = {
+// Default data always includes all dealers + TRHs from master file
+const getDefaultData = () => ({
   users: HARDCODED_USERS,
-  dealers: [], trhs: [], res: [],
-  visits: [], actions: [],
+  dealers: OFFLINE_DEALERS,
+  trhs: OFFLINE_TRHS,
+  res: [],
+  visits: [],
+  actions: [],
   categories: DEFAULT_CATS,
   depots: DEPOTS
-};
+});
 
-// Login function — tries Supabase first, falls back to hardcoded users
-async function tryLogin(name, password, supabaseAvailable) {
-  const trimName = name.trim().toLowerCase();
-  const trimPass = password.trim();
-
-  // Always check hardcoded users first — instant, works offline
-  const hardcoded = HARDCODED_USERS.find(u =>
-    u.name.toLowerCase().includes(trimName) && u.password === trimPass
-  );
-  if (hardcoded) return hardcoded;
-
-  // Then try Supabase for custom users added via Masters
-  if (supabaseAvailable && supabase) {
-    try {
-      const user = await db.loginUser(name, password);
-      if (user) return user;
-    } catch (e) {
-      console.log("Supabase login failed, using local only:", e.message);
-    }
+async function tryLogin(name, password) {
+  const n = name.trim().toLowerCase();
+  const p = password.trim();
+  // Always check hardcoded first
+  const user = HARDCODED_USERS.find(u => u.name.toLowerCase().includes(n) && u.password === p);
+  if (user) return user;
+  // Then Supabase for any custom users
+  if (supabase) {
+    try { return await db.loginUser(name, password); } catch (e) {}
   }
-
   return null;
 }
 
@@ -72,54 +65,48 @@ export default function App() {
     try { return JSON.parse(sessionStorage.getItem("ubs_user")); } catch { return null; }
   });
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [data, setData] = useState(emptyData);
+  const [data, setData] = useState(getDefaultData);
   const [loading, setLoading] = useState(true);
   const [supabaseOk, setSupabaseOk] = useState(false);
 
   const loadAll = useCallback(async () => {
-    if (!supabase) {
-      setSupabaseOk(false);
-      setLoading(false);
-      return;
-    }
+    // Always start with full offline data (all dealers + TRHs available immediately)
+    const base = getDefaultData();
+
+    if (!supabase) { setLoading(false); return; }
+
     try {
-      const [dealers, trhs, res, visits, actions, categories, dbUsers] = await Promise.all([
-        db.getDealers(), db.getTRHs(), db.getREs(),
-        db.getVisits(), db.getActions(), db.getCategories(), db.getUsers()
+      const [dbVisits, dbActions, dbCategories, dbDealers, dbUsers] = await Promise.all([
+        db.getVisits(), db.getActions(), db.getCategories(),
+        db.getDealers(), db.getUsers()
       ]);
 
-      // Merge DB users with hardcoded — hardcoded always win for same name
-      const dbUserNames = (dbUsers || []).map(u => u.name.toLowerCase());
-      const extraHardcoded = HARDCODED_USERS.filter(u => !dbUserNames.includes(u.name.toLowerCase()));
-
-      setData({
-        users: [...(dbUsers || []), ...extraHardcoded],
-        dealers: dealers || [],
-        trhs: trhs || [],
-        res: res || [],
-        visits: visits || [],
-        actions: actions || [],
-        categories: categories?.length ? categories : DEFAULT_CATS,
-        depots: DEPOTS
-      });
+      setData(prev => ({
+        ...prev,
+        // Use Supabase dealers if available (more complete), else keep offline
+        dealers: (dbDealers?.length > 0) ? dbDealers : base.dealers,
+        // Merge users — DB users + hardcoded
+        users: [...HARDCODED_USERS, ...(dbUsers||[]).filter(u => !HARDCODED_USERS.find(h => h.name.toLowerCase() === u.name.toLowerCase()))],
+        visits:     dbVisits     || [],
+        actions:    dbActions    || [],
+        categories: dbCategories?.length ? dbCategories : DEFAULT_CATS,
+      }));
       setSupabaseOk(true);
     } catch (err) {
-      console.error("Supabase load error:", err);
+      console.log("Supabase not available, using offline data:", err.message);
       setSupabaseOk(false);
-      // Keep default data so app still works
     }
     setLoading(false);
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Real-time sync
   useEffect(() => {
     if (!supabase || !supabaseOk) return;
-    const tables = ['users','dealers','trhs','res','visits','actions','categories'];
-    const subs = tables.map(table =>
-      supabase.channel(`rt-${table}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table }, () => loadAll())
+    const tables = ['visits','actions','categories','dealers'];
+    const subs = tables.map(t =>
+      supabase.channel(`rt-${t}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: t }, () => loadAll())
         .subscribe()
     );
     return () => subs.forEach(s => supabase.removeChannel(s));
@@ -129,42 +116,29 @@ export default function App() {
     setCurrentUser(user);
     sessionStorage.setItem("ubs_user", JSON.stringify(user));
   };
-
   const handleLogout = () => {
     setCurrentUser(null);
     sessionStorage.removeItem("ubs_user");
   };
-
   const updateData = (key, val) => setData(prev => ({ ...prev, [key]: val }));
 
   if (loading) return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"#0f2744" }}>
       <div style={{ fontSize:13, fontWeight:600, color:"#e8a020", letterSpacing:3, fontFamily:"monospace", marginBottom:20 }}>UBS FIELDOS</div>
       <div style={{ display:"flex", gap:8 }}>
-        {[0,1,2].map(i => (
-          <div key={i} style={{ width:10, height:10, borderRadius:"50%", background:"#e8a020", animation:`bounce 0.8s ${i*0.25}s infinite ease-in-out` }} />
-        ))}
+        {[0,1,2].map(i => <div key={i} style={{ width:10, height:10, borderRadius:"50%", background:"#e8a020", animation:`bounce 0.8s ${i*0.25}s infinite ease-in-out` }} />)}
       </div>
       <style>{`@keyframes bounce{0%,100%{transform:translateY(0);opacity:0.3}50%{transform:translateY(-8px);opacity:1}}`}</style>
     </div>
   );
 
   if (!currentUser) return (
-    <Login
-      supabaseOk={supabaseOk}
-      onLogin={handleLogin}
-      loginFn={(name, pass) => tryLogin(name, pass, supabaseOk)}
-    />
+    <Login supabaseOk={supabaseOk} onLogin={handleLogin} loginFn={tryLogin} />
   );
 
   return (
     <AppContext.Provider value={{ data, updateData, currentUser, reload: loadAll, offline: !supabaseOk }}>
       <div className="app-shell">
-        {!supabaseOk && (
-          <div style={{ background:"#e8a020", color:"#0f2744", fontSize:11, fontWeight:600, textAlign:"center", padding:"5px 12px" }}>
-            ⚠ Local mode — set up Supabase for cross-device sync
-          </div>
-        )}
         <TopBar user={currentUser} onLogout={handleLogout} />
         <main className="main-content">
           {activeTab === "dashboard" && <Dashboard setTab={setActiveTab} />}

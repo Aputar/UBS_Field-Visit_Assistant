@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import * as db from "../lib/db";
+import { OFFLINE_TRHS } from "../data/masterData";
 import { useApp } from "../context/AppContext";
 import { useToast, Toast } from "../components/Toast";
 
@@ -7,26 +8,35 @@ const DEPOTS = ["Ahmedabad","Mehsana","Palanpur","Kutchh","Junagadh","Surendrana
 
 function uid() { return "id_" + Math.random().toString(36).slice(2, 10); }
 
-// iOS-compatible WhatsApp opener
+// WhatsApp opener — works on Android and iPhone
 function openWhatsApp(phone, message) {
   const encoded = encodeURIComponent(message);
   const num = (phone || "").replace(/\D/g, "");
-  // Try wa.me first (works on Android), fallback to whatsapp:// deep link for iOS
-  const waUrl = num
-    ? `https://wa.me/91${num}?text=${encoded}`
-    : `https://wa.me/?text=${encoded}`;
-  const iosUrl = num
-    ? `whatsapp://send?phone=91${num}&text=${encoded}`
-    : `whatsapp://send?text=${encoded}`;
-
-  // Detect iOS
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  if (isIOS) {
-    // iOS: try deep link first, fallback to wa.me
-    window.location.href = iosUrl;
-    setTimeout(() => { window.open(waUrl, "_blank"); }, 1500);
+
+  if (num) {
+    // We have a phone number — open directly in their chat
+    const url = isIOS
+      ? `whatsapp://send?phone=91${num}&text=${encoded}`
+      : `https://wa.me/91${num}?text=${encoded}`;
+    if (isIOS) {
+      window.location.href = url;
+      // Fallback to wa.me if whatsapp:// doesn't open within 1.5s
+      setTimeout(() => { window.open(`https://wa.me/91${num}?text=${encoded}`, "_blank"); }, 1500);
+    } else {
+      window.open(url, "_blank");
+    }
   } else {
-    window.open(waUrl, "_blank");
+    // No phone number — open WhatsApp with message so user can pick contact
+    const url = isIOS
+      ? `whatsapp://send?text=${encoded}`
+      : `https://wa.me/?text=${encoded}`;
+    if (isIOS) {
+      window.location.href = url;
+      setTimeout(() => { window.open(`https://wa.me/?text=${encoded}`, "_blank"); }, 1500);
+    } else {
+      window.open(url, "_blank");
+    }
   }
 }
 
@@ -75,11 +85,13 @@ export default function NewVisit({ onDone }) {
 
   const toggleCat = (c) => setSelectedCats(s => s.includes(c) ? s.filter(x => x !== c) : [...s, c]);
 
+  // Build assignee list from all sources — always includes offline TRH data
   const allTRHRE = [
-    ...( data.trhs || []).map(t => t.name),
-    ...( data.res || []).map(r => r.name),
-    ...( data.users || []).filter(u => u.role === "TRH" || u.role === "RE").map(u => u.name),
-  ].filter((v, i, a) => v && a.indexOf(v) === i);
+    ...OFFLINE_TRHS.map(t => t.name),
+    ...(data.trhs || []).map(t => t.name),
+    ...(data.res || []).map(r => r.name),
+    ...(data.users || []).filter(u => u.role === "TRH" || u.role === "RE").map(u => u.name),
+  ].filter((v, i, a) => v && a.indexOf(v) === i).sort();
 
   // Voice recording — supports English + Hindi, works on Chrome/Safari
   const startRecording = () => {
@@ -282,9 +294,12 @@ export default function NewVisit({ onDone }) {
 
       showToast("✓ Visit saved! Sending WhatsApp…");
 
-      // Find TRH/RE phone
-      const trh = (data.trhs || []).find(t => t.name === assignTo) || (data.res || []).find(r => r.name === assignTo);
-      const phone = trh?.phone || "";
+      // Find TRH/RE phone — search across trhs, res, and offline TRH list
+      const allPersons = [...(data.trhs || []), ...(data.res || [])];
+      const matched = allPersons.find(p =>
+        p.name && assignTo && p.name.toLowerCase().trim() === assignTo.toLowerCase().trim()
+      );
+      const phone = matched?.phone || "";
       const msg = buildWhatsAppMessage(finalDealerName, finalDepot, notes, assignTo ? [{ assignedToName: assignTo, priority, deadline }] : [], currentUser.name, selectedCats);
 
       setTimeout(() => openWhatsApp(phone, msg), 700);
