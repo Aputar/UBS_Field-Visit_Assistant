@@ -7,6 +7,7 @@ import Actions from "./pages/Actions";
 import NewVisit from "./pages/NewVisit";
 import History from "./pages/History";
 import Masters from "./pages/Masters";
+import Export from "./pages/Export";
 import BottomNav from "./components/BottomNav";
 import TopBar from "./components/TopBar";
 import { supabase } from "./lib/supabase";
@@ -147,6 +148,7 @@ export default function App() {
           {activeTab === "visit"     && <NewVisit onDone={() => { loadAll(); setActiveTab("actions"); }} />}
           {activeTab === "history"   && <History />}
           {activeTab === "masters"   && <Masters />}
+          {activeTab === "export"    && <Export />}
         </main>
         <BottomNav active={activeTab} setActive={setActiveTab} role={currentUser.role} />
       </div>

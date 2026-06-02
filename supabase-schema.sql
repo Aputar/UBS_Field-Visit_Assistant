@@ -122,3 +122,15 @@ insert into categories (name) values
   ('New Product'),('Competition'),('Team Issue'),('Store Experience'),
   ('Inventory'),('Influencer/Contractor'),('Payment Issue'),('Others')
 on conflict (name) do nothing;
+
+-- Allow password updates (add this if running schema again)
+-- The existing "allow all" policy already covers UPDATE operations
+-- Just ensure the users table has no extra restrictions
+
+-- Function to safely update password
+create or replace function update_user_password(user_id text, new_password text)
+returns void as $$
+begin
+  update users set password = new_password where id = user_id;
+end;
+$$ language plpgsql security definer;
