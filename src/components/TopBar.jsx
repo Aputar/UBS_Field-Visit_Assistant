@@ -1,7 +1,8 @@
 import { useState } from "react";
 import ChangePassword from "./ChangePassword";
+import OverdueNotifications from "./OverdueNotifications";
 
-export default function TopBar({ user, onLogout }) {
+export default function TopBar({ user, onLogout, setTab }) {
   const [showCP, setShowCP] = useState(false);
 
   return (
@@ -14,15 +15,24 @@ export default function TopBar({ user, onLogout }) {
               {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
             </div>
           </div>
-          <div className="topbar-user">
-            <div className="topbar-name">{user.name}</div>
-            <div className="topbar-role">{user.role} · {user.region}</div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 3 }}>
-              <span
-                style={{ fontSize: 10, color: "#aac4e0", cursor: "pointer", textDecoration: "underline" }}
-                onClick={() => setShowCP(true)}
-              >Change password</span>
-              <span className="topbar-logout" onClick={onLogout}>Sign out</span>
+
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+            {/* Notification Bell */}
+            <div style={{ marginTop: 4 }}>
+              <OverdueNotifications onViewAction={() => setTab && setTab("actions")} />
+            </div>
+
+            {/* User info */}
+            <div className="topbar-user">
+              <div className="topbar-name">{user.name}</div>
+              <div className="topbar-role">{user.role} · {user.region}</div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 3 }}>
+                <span
+                  style={{ fontSize: 10, color: "#aac4e0", cursor: "pointer", textDecoration: "underline" }}
+                  onClick={() => setShowCP(true)}
+                >Change pwd</span>
+                <span className="topbar-logout" onClick={onLogout}>Sign out</span>
+              </div>
             </div>
           </div>
         </div>

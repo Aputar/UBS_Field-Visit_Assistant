@@ -15,6 +15,11 @@ export default function Dashboard({ setTab }) {
 
   const open = myActions.filter(a => a.status !== "Closed").length;
   const overdue = myActions.filter(a => a.status !== "Closed" && isOverdue(a.deadline)).length;
+  const dueSoon = myActions.filter(a => {
+    if (!a.deadline || a.status === "Closed" || isOverdue(a.deadline)) return false;
+    const diff = (new Date(a.deadline) - new Date()) / (1000*60*60*24);
+    return diff >= 0 && diff <= 2;
+  }).length;
   const closed = myActions.filter(a => a.status === "Closed").length;
   const total = myActions.length;
   const closureRate = total ? Math.round((closed / total) * 100) : 0;
@@ -46,6 +51,12 @@ export default function Dashboard({ setTab }) {
         <div className="alert alert-warn">
           <span>⚠</span>
           <span><b>{overdue} action{overdue > 1 ? "s" : ""} overdue</b> — {depotOverdue.slice(0, 3).join(", ")} need attention</span>
+        </div>
+      )}
+      {dueSoon > 0 && (
+        <div className="alert" style={{ background: "var(--amber-bg)", border: "1px solid #ffd580", color: "#7c4f00", marginBottom: 12 }}>
+          <span>🕐</span>
+          <span><b>{dueSoon} action{dueSoon > 1 ? "s" : ""} due within 2 days</b> — review and follow up</span>
         </div>
       )}
 

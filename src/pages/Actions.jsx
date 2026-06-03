@@ -34,7 +34,13 @@ export default function Actions() {
     : actions.filter(a => a.assignedTo === currentUser.id || a.createdBy === currentUser.id);
 
   const filtered = myActions.filter(a => {
-    const statusMatch = filter === "All" || (filter === "Open" && a.status === "Open") || (filter === "In Progress" && a.status === "In Progress") || (filter === "Closed" && a.status === "Closed") || (filter === "Overdue" && isOverdue(a.deadline) && a.status !== "Closed");
+    const dueSoon = (d) => { if(!d) return false; const diff=(new Date(d)-new Date())/(1000*60*60*24); return diff>=0&&diff<=2; };
+    const statusMatch = filter === "All"
+      || (filter === "Open" && a.status === "Open")
+      || (filter === "In Progress" && a.status === "In Progress")
+      || (filter === "Closed" && a.status === "Closed")
+      || (filter === "Overdue" && isOverdue(a.deadline) && a.status !== "Closed")
+      || (filter === "Due Soon" && dueSoon(a.deadline) && !isOverdue(a.deadline) && a.status !== "Closed");
     const catMatch = catFilter === "All" || a.category === catFilter;
     const searchMatch = !search || a.title.toLowerCase().includes(search.toLowerCase()) || getDealerName(a.dealerId).toLowerCase().includes(search.toLowerCase()) || (a.depot || "").toLowerCase().includes(search.toLowerCase());
     return statusMatch && catMatch && searchMatch;
@@ -74,8 +80,15 @@ export default function Actions() {
       </div>
 
       <div className="filter-row">
-        {["All","Open","In Progress","Overdue","Closed"].map(f => (
-          <button key={f} className={`filter-pill${filter === f ? " active" : ""}`} onClick={() => setFilter(f)}>{f}</button>
+        {[
+          { label: "All", key: "All" },
+          { label: "Open", key: "Open" },
+          { label: "In Progress", key: "In Progress" },
+          { label: `Overdue${myActions.filter(a=>a.status!=="Closed"&&isOverdue(a.deadline)).length>0?" ("+myActions.filter(a=>a.status!=="Closed"&&isOverdue(a.deadline)).length+")":""}`, key: "Overdue" },
+          { label: "Due Soon", key: "Due Soon" },
+          { label: "Closed", key: "Closed" },
+        ].map(f => (
+          <button key={f.key} className={`filter-pill${filter === f.key ? " active" : ""}`} onClick={() => setFilter(f.key)}>{f.label}</button>
         ))}
       </div>
 

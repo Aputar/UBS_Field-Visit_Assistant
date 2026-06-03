@@ -140,7 +140,7 @@ export default function App() {
   return (
     <AppContext.Provider value={{ data, updateData, currentUser, reload: loadAll, offline: !supabaseOk }}>
       <div className="app-shell">
-        <TopBar user={currentUser} onLogout={handleLogout} />
+        <TopBar user={currentUser} onLogout={handleLogout} setTab={setActiveTab} />
         <main className="main-content">
           {activeTab === "dashboard" && <Dashboard setTab={setActiveTab} />}
           {activeTab === "depots"    && <Depots />}
