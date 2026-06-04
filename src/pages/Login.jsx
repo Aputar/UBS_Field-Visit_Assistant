@@ -21,15 +21,6 @@ export default function Login({ onLogin, loginFn, supabaseOk }) {
     setLoading(false);
   };
 
-  const quickFill = (n, p) => { setName(n); setPassword(p); setError(""); };
-
-  const DEMO = [
-    { name: "Naveen Ahuja",  pass: "admin123", role: "ZRH" },
-    { name: "Rajesh Mehta",  pass: "admin123", role: "ZRH" },
-    { name: "Mayur Sardhara",pass: "mayur123", role: "TRH" },
-    { name: "Vikram Shah",   pass: "trh123",   role: "TRH" },
-  ];
-
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", background:"#ffffff", padding:"32px 24px" }}>
 
@@ -96,19 +87,8 @@ export default function Login({ onLogin, loginFn, supabaseOk }) {
           {loading ? "Signing in…" : "Sign In →"}
         </button>
 
-        {/* Tap-to-fill demo logins */}
-        <div style={{ marginTop:16, padding:"12px 14px", background:"#f4f5f7", borderRadius:8 }}>
-          <div style={{ fontSize:11, fontWeight:600, color:"#4b5563", marginBottom:8 }}>QUICK LOGIN — tap to fill</div>
-          {DEMO.map(u => (
-            <div key={u.name} onClick={() => quickFill(u.name, u.pass)}
-              style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:"1px solid #e2e5ea", cursor:"pointer" }}>
-              <span style={{ fontSize:13, color:"#0f2744", fontWeight:500 }}>{u.name}</span>
-              <span style={{ fontSize:11, color:"#9ca3af" }}>{u.role} · {u.pass}</span>
-            </div>
-          ))}
-          <div style={{ fontSize:10, color:"#9ca3af", marginTop:8, lineHeight:1.5 }}>
-            All TRH passwords: firstname + 123 (e.g. mayur123, swapnil123)
-          </div>
+        <div style={{ marginTop:14, fontSize:11, color:"#9ca3af", textAlign:"center", lineHeight:1.6 }}>
+          Contact your admin if you forgot your password
         </div>
       </div>
     </div>
