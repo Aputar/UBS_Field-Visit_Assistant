@@ -93,61 +93,82 @@ export default function NewVisit({ onDone }) {
     ...(data.users || []).filter(u => u.role === "TRH" || u.role === "RE").map(u => u.name),
   ].filter((v, i, a) => v && a.indexOf(v) === i).sort();
 
-  // Voice recording — supports English + Hindi, works on Chrome/Safari
+  // Voice recording — fixed duplicate/loop bug
   const startRecording = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       showToast("Voice not supported. Please use Chrome on Android or Safari on iPhone.");
       return;
     }
+    // Stop any existing session first
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch(e) {}
+      recognitionRef.current = null;
+    }
+
     try {
       const r = new SR();
-      r.continuous = true;
+      // continuous=false prevents duplicate firing and infinite loops
+      // We restart manually if user keeps speaking
+      r.continuous = false;
       r.interimResults = true;
-      r.lang = "en-IN"; // Indian English — also picks up Hindi words
+      r.lang = "en-IN";
       r.maxAlternatives = 1;
 
-      let finalText = "";
+      let collectedText = ""; // accumulates across restarts
+      let isStoppingIntentionally = false;
 
       r.onstart = () => {
         setIsRecording(true);
         setVoicePhase("recording");
-        setTranscript("");
-        finalText = "";
       };
 
       r.onresult = (e) => {
         let interim = "";
+        let newFinal = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
           if (e.results[i].isFinal) {
-            finalText += e.results[i][0].transcript + " ";
+            newFinal += e.results[i][0].transcript + " ";
           } else {
             interim += e.results[i][0].transcript;
           }
         }
-        setTranscript(finalText + interim);
+        if (newFinal) collectedText += newFinal;
+        // Show collected + current interim — no duplicates
+        setTranscript((collectedText + interim).trim());
       };
 
       r.onerror = (e) => {
-        console.error("Speech recognition error:", e.error);
+        console.error("Speech error:", e.error);
         if (e.error === "not-allowed") {
-          showToast("Microphone access denied. Please allow mic in browser settings.");
-        } else if (e.error === "no-speech") {
-          showToast("No speech detected. Please speak louder and try again.");
+          showToast("Microphone access denied. Allow mic in browser settings.");
+          setIsRecording(false);
+          setVoicePhase("idle");
+        } else if (e.error === "no-speech" || e.error === "aborted") {
+          // Expected — ignore, will restart below if still recording
         } else if (e.error === "network") {
-          showToast("Network error. Check your internet connection.");
-        } else {
-          showToast("Mic error: " + e.error + ". Try again.");
+          showToast("Network error. Check your internet.");
+          setIsRecording(false);
+          setVoicePhase("idle");
         }
-        setIsRecording(false);
-        setVoicePhase("idle");
       };
 
       r.onend = () => {
-        // Only process if we have text and we stopped intentionally
-        if (finalText.trim()) {
-          setTranscript(finalText.trim());
+        // If user hasn't tapped Stop, restart automatically to keep recording
+        if (!isStoppingIntentionally && recognitionRef.current === r) {
+          try {
+            r.start(); // restart for continuous feel without duplicates
+          } catch(e) {
+            // Can't restart — just stop cleanly
+          }
         }
+      };
+
+      // Attach stop function to ref so stopRecording can call it
+      r._stopClean = () => {
+        isStoppingIntentionally = true;
+        try { r.stop(); } catch(e) {}
+        return collectedText.trim();
       };
 
       recognitionRef.current = r;
@@ -160,19 +181,26 @@ export default function NewVisit({ onDone }) {
   };
 
   const stopRecording = () => {
-    try { recognitionRef.current?.stop(); } catch(e) {}
+    let captured = "";
+    if (recognitionRef.current?._stopClean) {
+      captured = recognitionRef.current._stopClean();
+    } else {
+      try { recognitionRef.current?.stop(); } catch(e) {}
+      captured = transcript;
+    }
+    recognitionRef.current = null;
     setIsRecording(false);
+
+    // Use whatever we have — transcript state or captured from closure
+    const finalText = captured || transcript;
+    if (!finalText?.trim()) {
+      showToast("No speech captured. Please try again.");
+      setVoicePhase("idle");
+      return;
+    }
+    setTranscript(finalText.trim());
     setVoicePhase("processing");
-    // Small delay to let final results come through
-    setTimeout(() => {
-      const captured = transcript;
-      if (!captured?.trim()) {
-        showToast("No speech captured. Please try again.");
-        setVoicePhase("idle");
-        return;
-      }
-      parseWithAI(captured);
-    }, 600);
+    setTimeout(() => parseWithAI(finalText.trim()), 300);
   };
 
   const parseWithAI = async (text) => {

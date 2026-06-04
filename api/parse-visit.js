@@ -51,6 +51,7 @@ Return exactly this JSON:
 
     if (nvidiaKey) {
       // ── NVIDIA API ─────────────────────────────────────────
+      const nvidiaModel = process.env.NVIDIA_MODEL || "meta/llama-3.3-70b-instruct";
       const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -58,13 +59,14 @@ Return exactly this JSON:
           "Authorization": `Bearer ${nvidiaKey}`
         },
         body: JSON.stringify({
-          model: process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct",
+          model: nvidiaModel,
           messages: [
-            { role: "system", content: "You are a helpful field visit assistant. Always respond with valid JSON only." },
+            { role: "system", content: "You are a field visit assistant for UltraTech Building Solutions India. Always respond with valid JSON only. No markdown, no explanation." },
             { role: "user", content: prompt }
           ],
-          temperature: 0.1,
-          max_tokens: 1000,
+          temperature: 0.2,
+          top_p: 0.7,
+          max_tokens: 1024,
           stream: false
         })
       });
