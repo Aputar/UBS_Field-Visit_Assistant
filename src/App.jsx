@@ -51,13 +51,33 @@ const getDefaultData = () => ({
 async function tryLogin(name, password) {
   const n = name.trim().toLowerCase();
   const p = password.trim();
-  // Always check hardcoded first
-  const user = HARDCODED_USERS.find(u => u.name.toLowerCase().includes(n) && u.password === p);
-  if (user) return user;
-  // Then Supabase for any custom users
+
+  // 1. Check hardcoded users first (works offline)
+  const hardcoded = HARDCODED_USERS.find(u =>
+    u.name.toLowerCase().includes(n) && u.password === p
+  );
+  if (hardcoded) return hardcoded;
+
+  // 2. Try Supabase — for any user added via Table Editor or Masters
   if (supabase) {
-    try { return await db.loginUser(name, password); } catch (e) {}
+    try {
+      // Case-insensitive name match, exact password match
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .ilike('name', `%${name.trim()}%`)
+        .limit(10);
+
+      if (!error && data && data.length > 0) {
+        // Find exact password match (case-sensitive)
+        const match = data.find(u => u.password === p);
+        if (match) return match;
+      }
+    } catch (e) {
+      console.log("Supabase login error:", e.message);
+    }
   }
+
   return null;
 }
 

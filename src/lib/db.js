@@ -8,14 +8,18 @@ export async function getUsers() {
 }
 
 export async function loginUser(name, password) {
+  // Fetch by name (case-insensitive), then check password manually
+  // This avoids issues with .eq() being case-sensitive on some Supabase configs
   const { data, error } = await supabase
     .from('users')
     .select('*')
     .ilike('name', `%${name.trim()}%`)
-    .eq('password', password.trim())
-    .limit(1)
+    .limit(20)
   if (error) throw error
-  return data?.[0] || null
+  if (!data || data.length === 0) return null
+  // Find exact password match
+  const user = data.find(u => u.password === password.trim())
+  return user || null
 }
 
 export async function createUser(user) {
