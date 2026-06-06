@@ -9,7 +9,7 @@ export default function Dashboard({ setTab }) {
   const { data, currentUser } = useApp();
   const { actions, visits, dealers, depots, trhs } = data;
 
-  const myActions = currentUser.role === "ZRH"
+  const myActions = ["FH","ZRH"].includes(currentUser.role)
     ? actions
     : actions.filter(a => a.assignedTo === currentUser.id);
 

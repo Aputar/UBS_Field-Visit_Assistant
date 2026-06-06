@@ -19,6 +19,7 @@ const DEFAULT_CATS = ["Cement","Paints","PVC","Sanitary","Tiles","Waterproofing"
 const DEPOTS = ["Ahmedabad","Mehsana","Palanpur","Kutchh","Junagadh","Surendranagar","Rajkot","Jamnagar","Bharuch","Valsad","Surat","Gandhinagar","Dahod","Anand","Vadodara","Bhavnagar","Greater Mumbai","Thane","Dahanu"];
 
 const HARDCODED_USERS = [
+  { id: "u0",  name: "Vaibhav Goyal",         role: "FH",  region: "West Region",          password: "Admin1234"    },
   { id: "u1",  name: "Naveen Ahuja",          role: "ZRH", region: "Gujarat",              password: "admin123"     },
   { id: "u2",  name: "Rajesh Mehta",          role: "ZRH", region: "West (Guj + Mumbai)",  password: "admin123"     },
   { id: "u3",  name: "Vikram Shah",           role: "TRH", region: "Gujarat North",        password: "trh123"       },
@@ -52,29 +53,41 @@ async function tryLogin(name, password) {
   const n = name.trim().toLowerCase();
   const p = password.trim();
 
-  // 1. Check hardcoded users first (works offline)
+  // 1. Always check hardcoded users first — works offline instantly
   const hardcoded = HARDCODED_USERS.find(u =>
     u.name.toLowerCase().includes(n) && u.password === p
   );
   if (hardcoded) return hardcoded;
 
-  // 2. Try Supabase — for any user added via Table Editor or Masters
+  // 2. Try server-side login API — most reliable, bypasses browser CORS/RLS issues
+  try {
+    const response = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), password: p })
+    });
+    if (response.ok) {
+      const result = await response.json();
+      if (result.user) return result.user;
+    }
+  } catch (e) {
+    console.log("Server login failed, trying client-side:", e.message);
+  }
+
+  // 3. Fallback — try Supabase client directly
   if (supabase) {
     try {
-      // Case-insensitive name match, exact password match
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .ilike('name', `%${name.trim()}%`)
-        .limit(10);
-
-      if (!error && data && data.length > 0) {
-        // Find exact password match (case-sensitive)
+        .limit(20);
+      if (!error && data?.length > 0) {
         const match = data.find(u => u.password === p);
         if (match) return match;
       }
     } catch (e) {
-      console.log("Supabase login error:", e.message);
+      console.log("Supabase client login error:", e.message);
     }
   }
 

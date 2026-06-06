@@ -29,7 +29,7 @@ export default function Actions() {
 
   const getDealerName = (id) => dealers.find(d => d.id === id)?.name || "—";
 
-  const myActions = currentUser.role === "ZRH"
+  const myActions = ["FH","ZRH"].includes(currentUser.role)
     ? actions
     : actions.filter(a => a.assignedTo === currentUser.id || a.createdBy === currentUser.id);
 

@@ -20,7 +20,7 @@ export default function OverdueNotifications({ onViewAction }) {
     try { return JSON.parse(localStorage.getItem("ubs_dismissed_notifs") || "[]"); } catch { return []; }
   });
 
-  const myActions = currentUser.role === "ZRH"
+  const myActions = ["FH","ZRH"].includes(currentUser.role)
     ? (data.actions || [])
     : (data.actions || []).filter(a =>
         a.assigned_to === currentUser.name ||

@@ -25,7 +25,14 @@ export default function TopBar({ user, onLogout, setTab }) {
             {/* User info */}
             <div className="topbar-user">
               <div className="topbar-name">{user.name}</div>
-              <div className="topbar-role">{user.role} · {user.region}</div>
+              <div className="topbar-role">
+              <span style={{
+                background: user.role==="FH" ? "#e8a020" : "rgba(255,255,255,0.15)",
+                color: user.role==="FH" ? "#0f2744" : "#fff",
+                padding: "1px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, marginRight: 4
+              }}>{user.role}</span>
+              {user.region}
+            </div>
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 3 }}>
                 <span
                   style={{ fontSize: 10, color: "#aac4e0", cursor: "pointer", textDecoration: "underline" }}

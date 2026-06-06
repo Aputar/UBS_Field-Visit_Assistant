@@ -109,10 +109,7 @@ alter publication supabase_realtime add table categories;
 
 -- Seed default users
 insert into users (id, name, role, region, password) values
-  ('u1', 'Rajesh Mehta', 'ZRH', 'West (Guj + Mumbai)', 'admin123'),
-  ('u2', 'Naveen Ahuja', 'ZRH', 'Gujarat', 'admin123'),
-  ('u3', 'Vikram Shah', 'TRH', 'Gujarat North', 'trh123'),
-  ('u4', 'Priya Desai', 'RE', 'Ahmedabad', 're123')
+  ('u1', 'Naveen Ahuja', 'ZRH', 'Gujarat', 'admin123')
 on conflict (id) do nothing;
 
 -- Seed default categories
@@ -134,3 +131,23 @@ begin
   update users set password = new_password where id = user_id;
 end;
 $$ language plpgsql security definer;
+
+-- Add Vaibhav Goyal as FH (Function Head)
+insert into users (id, name, role, region, password) values
+  ('fh1', 'Vaibhav Goyal', 'FH', 'Head Office', 'Admin1234')
+on conflict (id) do update set role='FH', password='Admin1234';
+
+-- ============================================================
+-- HOW TO ADD USERS DIRECTLY IN SUPABASE TABLE EDITOR:
+-- ============================================================
+-- 1. Go to supabase.com → your project → Table Editor → users
+-- 2. Click "Insert row"
+-- 3. Fill in these columns:
+--    id       → any unique text e.g. "u_vaibhav" 
+--    name     → Full name exactly as they will type it e.g. "Vaibhav Goyal"
+--    role     → FH / ZRH / TRH / RE
+--    region   → their region e.g. "West Region"
+--    password → their password e.g. "Admin1234"
+-- 4. Click Save
+-- 5. Person can log in immediately — no redeployment needed!
+-- ============================================================

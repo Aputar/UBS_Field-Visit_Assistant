@@ -20,7 +20,7 @@ export default function Masters() {
 
   const categories = data.categories || DEFAULT_CATS;
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const canEdit = currentUser.role === "ZRH" || currentUser.role === "TRH";
+  const canEdit = ["FH","ZRH","TRH"].includes(currentUser.role);
 
   const save = async (fn, successMsg) => {
     setSaving(true);
@@ -208,7 +208,7 @@ export default function Masters() {
           <div className="form-row">
             <div className="form-group"><label className="form-label">Role</label>
               <select className="form-select" value={form.role||"TRH"} onChange={e=>set("role",e.target.value)}>
-                <option>ZRH</option><option>TRH</option><option>RE</option><option>TSH</option>
+                <option>FH</option><option>ZRH</option><option>TRH</option><option>RE</option><option>TSH</option>
               </select>
             </div>
             <div className="form-group"><label className="form-label">Region</label><input className="form-input" value={form.region||""} onChange={e=>set("region",e.target.value)}/></div>
@@ -262,7 +262,7 @@ export default function Masters() {
             <div>
               <div style={{fontSize:14,fontWeight:600,color:"var(--navy)"}}>{u.name}</div>
               <div style={{fontSize:11,color:"var(--text3)",marginTop:3}}>
-                <span className="badge badge-navy" style={{fontSize:9}}>{u.role}</span> {u.region}
+                <span className={`badge ${u.role==="FH"?"badge-red":u.role==="ZRH"?"badge-navy":"badge-blue"}`} style={{fontSize:9}}>{u.role}</span> {u.region}
               </div>
             </div>
             {canEdit&&u.id!==currentUser.id&&<button className="btn-danger" disabled={saving} onClick={()=>deleteItem(db.deleteUser,"users",u.id)}>Delete</button>}
