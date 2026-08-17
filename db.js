@@ -1,24 +1,143 @@
-const tabs = [
-  { id: "dashboard", label: "Home", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
-  { id: "depots", label: "Depots", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg> },
-  { id: "visit", label: "New Visit", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>, special: true },
-  { id: "actions", label: "Actions", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg> },
-  { id: "masters", label: "Masters", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> },
-];
+import { supabase } from './supabase'
 
-export default function BottomNav({ active, setActive, role }) {
-  return (
-    <div className="bottom-nav">
-      {tabs.map(t => (
-        <button
-          key={t.id}
-          className={`nav-btn${t.special ? " new-visit" : ""}${active === t.id ? " active" : ""}`}
-          onClick={() => setActive(t.id)}
-        >
-          {t.icon}
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
+// ── USERS ──────────────────────────────────────────────────
+export async function getUsers() {
+  const { data, error } = await supabase.from('users').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function loginUser(name, password) {
+  // Fetch by name (case-insensitive), then check password manually
+  // This avoids issues with .eq() being case-sensitive on some Supabase configs
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .ilike('name', `%${name.trim()}%`)
+    .limit(20)
+  if (error) throw error
+  if (!data || data.length === 0) return null
+  // Find exact password match
+  const user = data.find(u => u.password === password.trim())
+  return user || null
+}
+
+export async function createUser(user) {
+  const { data, error } = await supabase.from('users').insert([user]).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteUser(id) {
+  const { error } = await supabase.from('users').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── DEALERS ────────────────────────────────────────────────
+export async function getDealers() {
+  const { data, error } = await supabase.from('dealers').select('*').order('name')
+  if (error) throw error
+  return data
+}
+
+export async function createDealer(dealer) {
+  const { data, error } = await supabase.from('dealers').insert([dealer]).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteDealer(id) {
+  const { error } = await supabase.from('dealers').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── TRHS ───────────────────────────────────────────────────
+export async function getTRHs() {
+  const { data, error } = await supabase.from('trhs').select('*').order('name')
+  if (error) throw error
+  return data
+}
+
+export async function createTRH(trh) {
+  const { data, error } = await supabase.from('trhs').insert([trh]).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteTRH(id) {
+  const { error } = await supabase.from('trhs').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── REs ────────────────────────────────────────────────────
+export async function getREs() {
+  const { data, error } = await supabase.from('res').select('*').order('name')
+  if (error) throw error
+  return data
+}
+
+export async function createRE(re) {
+  const { data, error } = await supabase.from('res').insert([re]).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteRE(id) {
+  const { error } = await supabase.from('res').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── VISITS ─────────────────────────────────────────────────
+export async function getVisits() {
+  const { data, error } = await supabase.from('visits').select('*').order('date', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createVisit(visit) {
+  const { data, error } = await supabase.from('visits').insert([visit]).select().single()
+  if (error) throw error
+  return data
+}
+
+// ── ACTIONS ────────────────────────────────────────────────
+export async function getActions() {
+  const { data, error } = await supabase.from('actions').select('*').order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createAction(action) {
+  const { data, error } = await supabase.from('actions').insert([action]).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateAction(id, updates) {
+  const { data, error } = await supabase.from('actions').update(updates).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteAction(id) {
+  const { error } = await supabase.from('actions').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── CATEGORIES ─────────────────────────────────────────────
+export async function getCategories() {
+  const { data, error } = await supabase.from('categories').select('*').order('name')
+  if (error) throw error
+  return data?.map(c => c.name) || []
+}
+
+export async function createCategory(name) {
+  const { data, error } = await supabase.from('categories').insert([{ name }]).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteCategory(name) {
+  const { error } = await supabase.from('categories').delete().eq('name', name)
+  if (error) throw error
 }

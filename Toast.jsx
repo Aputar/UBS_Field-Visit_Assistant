@@ -1,20 +1,15 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#0f2744" />
-    <title>UBS FieldOS</title>
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="UBS FieldOS" />
-    <script type="module" crossorigin src="/assets/index-dc02c361.js"></script>
-    <link rel="stylesheet" href="/assets/index-bce518d9.css">
-  </head>
-  <body>
-    <div id="root"></div>
-    
-  </body>
-</html>
+import { useState, useCallback } from "react";
+
+export function useToast() {
+  const [toast, setToast] = useState(null);
+  const showToast = useCallback((msg, duration = 2500) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), duration);
+  }, []);
+  return { toast, showToast };
+}
+
+export function Toast({ message }) {
+  if (!message) return null;
+  return <div className="toast">{message}</div>;
+}

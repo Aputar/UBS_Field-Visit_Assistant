@@ -109,7 +109,10 @@ alter publication supabase_realtime add table categories;
 
 -- Seed default users
 insert into users (id, name, role, region, password) values
-  ('u1', 'Naveen Ahuja', 'ZRH', 'Gujarat', 'admin123')
+  ('u1', 'Rajesh Mehta', 'ZRH', 'West (Guj + Mumbai)', 'admin123'),
+  ('u2', 'Naveen Ahuja', 'ZRH', 'Gujarat', 'admin123'),
+  ('u3', 'Vikram Shah', 'TRH', 'Gujarat North', 'trh123'),
+  ('u4', 'Priya Desai', 'RE', 'Ahmedabad', 're123')
 on conflict (id) do nothing;
 
 -- Seed default categories
@@ -134,7 +137,7 @@ $$ language plpgsql security definer;
 
 -- Add Vaibhav Goyal as FH (Function Head)
 insert into users (id, name, role, region, password) values
-  ('fh1', 'Vaibhav Goyal', 'FH', 'Head Office', 'Admin1234')
+  ('fh1', 'Vaibhav Goyal', 'FH', 'West Region', 'Admin1234')
 on conflict (id) do update set role='FH', password='Admin1234';
 
 -- ============================================================

@@ -1,15 +1,9 @@
-import { useState, useCallback } from "react";
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
 
-export function useToast() {
-  const [toast, setToast] = useState(null);
-  const showToast = useCallback((msg, duration = 2500) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), duration);
-  }, []);
-  return { toast, showToast };
-}
-
-export function Toast({ message }) {
-  if (!message) return null;
-  return <div className="toast">{message}</div>;
-}
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
